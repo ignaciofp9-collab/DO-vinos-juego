@@ -588,3 +588,185 @@ function islandName(props){
     .replace(/^la gomera$/i,'La Gomera')
     .replace(/^el hierro$/i,'El Hierro')
     .replace(/^tenerife$/i,'Tenerife');
+}
+
+/* España real (es-atlas CCAA) con inset de Canarias (si disponible) */
+async function renderSpain(host){
+  host.innerHTML='';
+  try{
+    const es = await loadSpainTopo();
+    const comm = await loadSpainCommunities();
+
+    const width = 1000, height = 620;
+    const svg = D.select(host).append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio','xMidYMid meet');
+
+    // Usamos la proyección compuesta si existe; si no, fallback a Mercator
+    const projection = (window.d3 && typeof window.d3.geoConicConformalSpain === 'function')
+      ? window.d3.geoConicConformalSpain()
+      : D.geoMercator();
+
+    const path = D.geoPath(projection);
+
+    const ccaa = topojson.feature(comm, comm.objects.communities || comm.objects.autonomous_regions);
+    const provincias = topojson.feature(es, es.objects.provinces);
+
+    projection.fitSize([width, height], ccaa);
+
+    svg.append('rect').attr('class','hint')
+      .attr('x',0).attr('y',0).attr('width',width).attr('height',height);
+
+    const gRegions = svg.append('g');
+    gRegions.selectAll('path.region')
+      .data(ccaa.features)
+      .enter().append('path')
+      .attr('class','region')
+      .attr('d', path)
+      .each(function(d){
+        const raw = d.properties.NAMEUNIT || d.properties.name || '';
+        const nm = normalizeCCAA(raw);
+        this.setAttribute('data-id', nm);
+        state.regionPaths[nm] = this;
+      })
+      .append('title').text(d => normalizeCCAA(d.properties.NAMEUNIT || d.properties.name));
+
+    svg.append('g').selectAll('path.dz')
+      .data(ccaa.features)
+      .enter().append('path')
+      .attr('class','dz')
+      .attr('d', path)
+      .attr('data-id', d => normalizeCCAA(d.properties.NAMEUNIT || d.properties.name || ''))
+      .on('dragover', function(e){ e.preventDefault(); this.classList.add('active'); })
+      .on('dragleave', function(){ this.classList.remove('active'); })
+      .on('drop', function(e){
+        e.preventDefault(); this.classList.remove('active');
+        handleDrop(this.getAttribute('data-id'));
+      })
+      .on('click', function(){
+        const zone = this.getAttribute('data-id');
+        if(state.selectedChip){ handleDrop(zone, state.selectedChip); }
+      });
+
+    // Malla de provincias (no intercepta eventos)
+    svg.append('path')
+      .attr('d', path(topojson.mesh(es, es.objects.provinces, (a,b)=>a!==b)))
+      .attr('fill','none')
+      .attr('stroke','#64748b')
+      .attr('stroke-width',0.6)
+      .attr('vector-effect','non-scaling-stroke')
+      .attr('pointer-events','none');
+
+    // Borde del inset si la proyección lo soporta
+    if (projection.getCompositionBorders) {
+      svg.append('path')
+        .attr('d', projection.getCompositionBorders())
+        .attr('fill','none')
+        .attr('stroke','#94a3b8')
+        .attr('stroke-dasharray','4 3')
+        .attr('vector-effect','non-scaling-stroke')
+        .attr('pointer-events','none');
+    }
+
+  }catch(err){
+    showMapError(host, 'España', err);
+  }
+}
+
+/* ==========================
+   Lógica de juego
+   ========================== */
+function handleDrop(zoneId, forcedChip){
+  const dragging = forcedChip || $('.draggable.dragging'); if(!dragging) return;
+  const name = dragging.textContent;
+  const dataset = state.mode==='canarias'? dopCanarias : dopEspaña;
+
+  const zoneNorm = (state.mode==='espana') ? normalizeCCAA(zoneId) : zoneId;
+  const item = dataset.find(d=>d.name===name);
+
+  const ok = item && item.targets.includes(zoneNorm);
+  if(ok){
+    state.hits++;
+    dragging.remove();
+    if(state.selectedChip===dragging){ state.selectedChip=null; }
+    const rp = state.regionPaths[zoneId] || state.regionPaths[zoneNorm];
+    if(rp){ rp.classList.add('hit'); }
+    toast(`✔ Correcto: ${name}`);
+  }else{
+    state.mistakes++; toast(`✖ Zona incorrecta para "${name}"`);
+  }
+  updateHUD();
+}
+
+function computeScore(){
+  const elapsed = state.start? (Date.now()-state.start) : 0;
+  const pending = $('#dopList').children.length;
+  const penalties = state.mistakes*1500 + pending*5000;
+  const raw = Math.max(0, 100000 - elapsed - penalties);
+  return { elapsed, score: Math.round(raw/100) };
+}
+
+function saveScore(){
+  const nick = $('#nick').value.trim() || 'Anónimo';
+  const {elapsed, score} = computeScore();
+  const rec = { nick, mode: state.mode, time: elapsed, mistakes: state.mistakes, score, date: Date.now() };
+  const key = 'vinoDOP.rank.v1';
+  const arr = JSON.parse(localStorage.getItem(key)||'[]');
+  arr.push(rec);
+  arr.sort((a,b)=> b.score - a.score || a.mistakes - b.mistakes || a.time - b.time);
+  localStorage.setItem(key, JSON.stringify(arr.slice(0,100)));
+  renderRank();
+  toast(`Puntuación: ${escapeHtml(nick)} · ${fmtTime(elapsed)} · ${state.mistakes} errores · ${score} pts`);
+}
+
+function renderRank(){
+  const key = 'vinoDOP.rank.v1';
+  const arr = JSON.parse(localStorage.getItem(key)||'[]');
+  const tb = $('#tblRank tbody'); tb.innerHTML='';
+  arr.forEach((r,i)=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(r.nick)}</td><td>${r.mode==='canarias'?'Canarias':'España'}</td><td>${fmtTime(r.time)}</td><td>${r.mistakes}</td><td>${r.score}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function maybeWarnFileProtocol(){
+  if(location.protocol==='file:'){
+    toast('Aviso: abre en servidor local para evitar CORS');
+  }
+}
+
+/* ==========================
+   Eventos
+   ========================== */
+$('#btnStart').addEventListener('click', ()=>{ resetCounters(); loadPool(); startTimer(); toast('¡Partida iniciada!'); });
+$('#btnReset').addEventListener('click', ()=>{ stopTimer(); $('#time').textContent='00:00'; resetCounters(); loadPool(); toast('Reiniciado.'); });
+$('#finish').addEventListener('click', ()=>{ stopTimer(); saveScore(); });
+$('#giveup').addEventListener('click', ()=>{ stopTimer(); state.mistakes += $('#dopList').children.length; updateHUD(); saveScore(); });
+$('#shuffle').addEventListener('click', ()=>{
+  const list=$('#dopList'); const els=[...list.children];
+  for(let i=els.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); list.appendChild(els[j]); els.splice(j,1); }
+});
+$('#search').addEventListener('input', loadPool);
+$$('.tab').forEach(t=> t.addEventListener('click', ()=> setMode(t.dataset.mode)));
+$$('.tab').forEach(t=> t.addEventListener('keydown', (ev)=>{
+  if(ev.key==='Enter' || ev.key===' '){ ev.preventDefault(); setMode(t.dataset.mode); }
+}));
+$('#export').addEventListener('click', ()=>{
+  const key='vinoDOP.rank.v1'; const arr=localStorage.getItem(key)||'[]';
+  const blob=new Blob([arr],{type:'application/json'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download='ranking_dop.json'; a.click();
+});
+$('#import').addEventListener('click', ()=> $('#file').click());
+$('#file').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>{ try{ const key='vinoDOP.rank.v1'; JSON.parse(rd.result); localStorage.setItem(key, rd.result); renderRank(); toast('Ranking importado.'); }catch{ toast('Archivo no válido'); } };
+  rd.readAsText(f);
+});
+
+/* init */
+maybeWarnFileProtocol();
+renderMap().then(()=>{ loadPool(); renderRank(); }).catch(()=>{ loadPool(); renderRank(); });
+</script>
+</body>
+</html>
