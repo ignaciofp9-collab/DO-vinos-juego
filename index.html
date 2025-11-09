@@ -4,7 +4,9 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Juego DOP del Vino · Mapas reales (España & Canarias)</title>
-<script src="https://unpkg.com/d3@7"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://d3js.org/topojson.v3.min.js"></script>
+<script src="https://unpkg.com/d3-composite-projections@1.3.0"></script>
 <style>
   :root{
     --bg:#f8fafc;--panel:#f1f5f9;--card:#e2e8f0;--muted:#6b7280;--text:#0f172a;
@@ -162,44 +164,6 @@ const zonesCanarias = [
   { id:"Fuerteventura", label:"Fuerteventura" },
 ];
 
-/* GeoJSON simplificados incluidos en el bundle para evitar fallos de red */
-
-const canariasGeo = {
-  type:'FeatureCollection',
-  features:[
-    {type:'Feature',properties:{isla:'El Hierro'},geometry:{type:'Polygon',coordinates:[[[-18.14,27.74],[-18.04,27.63],[-17.90,27.60],[-17.78,27.70],[-17.73,27.85],[-17.79,27.97],[-17.93,28.05],[-18.08,28.03],[-18.18,27.91],[-18.17,27.80],[-18.14,27.74]]]}},
-    {type:'Feature',properties:{isla:'La Palma'},geometry:{type:'Polygon',coordinates:[[[-18.05,28.48],[-17.92,28.40],[-17.76,28.36],[-17.63,28.44],[-17.55,28.60],[-17.58,28.75],[-17.70,28.88],[-17.86,28.94],[-18.00,28.88],[-18.08,28.72],[-18.07,28.58],[-18.05,28.48]]]}},
-    {type:'Feature',properties:{isla:'La Gomera'},geometry:{type:'Polygon',coordinates:[[[-17.47,28.07],[-17.35,27.99],[-17.20,28.00],[-17.10,28.12],[-17.09,28.23],[-17.17,28.32],[-17.30,28.37],[-17.42,28.35],[-17.50,28.27],[-17.52,28.18],[-17.47,28.07]]]}},
-    {type:'Feature',properties:{isla:'Tenerife'},geometry:{type:'Polygon',coordinates:[[[-16.90,28.02],[-16.73,27.92],[-16.42,27.90],[-16.25,28.00],[-16.14,28.22],[-16.16,28.43],[-16.27,28.60],[-16.48,28.73],[-16.72,28.76],[-16.88,28.68],[-16.98,28.47],[-17.01,28.28],[-16.97,28.12],[-16.90,28.02]]]}},
-    {type:'Feature',properties:{isla:'Gran Canaria'},geometry:{type:'Polygon',coordinates:[[[-15.79,27.85],[-15.61,27.76],[-15.38,27.78],[-15.23,27.93],[-15.18,28.11],[-15.23,28.27],[-15.39,28.39],[-15.58,28.44],[-15.74,28.37],[-15.86,28.20],[-15.88,28.03],[-15.79,27.85]]]}},
-    {type:'Feature',properties:{isla:'Fuerteventura'},geometry:{type:'Polygon',coordinates:[[[-14.55,28.09],[-14.36,27.99],[-14.08,27.97],[-13.85,28.08],[-13.73,28.24],[-13.69,28.46],[-13.78,28.70],[-13.97,28.92],[-14.18,29.02],[-14.37,28.95],[-14.49,28.74],[-14.56,28.45],[-14.55,28.09]]]}},
-    {type:'Feature',properties:{isla:'Lanzarote'},geometry:{type:'MultiPolygon',coordinates:[[[[-13.88,28.93],[-13.68,28.82],[-13.45,28.84],[-13.28,29.02],[-13.25,29.26],[-13.35,29.45],[-13.55,29.55],[-13.74,29.50],[-13.87,29.30],[-13.90,29.08],[-13.88,28.93]]],[[[-13.55,29.33],[-13.45,29.28],[-13.38,29.35],[-13.45,29.42],[-13.55,29.33]]]]}},
-  ]
-};
-
-const spainGeo = {
-  type:'FeatureCollection',
-  features:[
-    {type:'Feature',properties:{name:'Galicia'},geometry:{type:'Polygon',coordinates:[[[-9.35,41.9],[-8.45,41.7],[-7.65,41.9],[-7.15,42.4],[-7.05,43.1],[-7.45,43.6],[-8.35,43.9],[-9.10,43.6],[-9.32,42.8],[-9.35,41.9]]]}},
-    {type:'Feature',properties:{name:'Asturias'},geometry:{type:'Polygon',coordinates:[[[-7.15,43.1],[-6.35,43.0],[-5.55,43.1],[-5.05,43.4],[-5.35,43.7],[-6.20,43.8],[-7.00,43.6],[-7.15,43.1]]]}},
-    {type:'Feature',properties:{name:'Cantabria'},geometry:{type:'Polygon',coordinates:[[[-5.35,43.1],[-4.55,43.0],[-3.60,43.0],[-3.35,43.3],[-3.75,43.6],[-4.50,43.7],[-5.05,43.4],[-5.35,43.1]]]}},
-    {type:'Feature',properties:{name:'País Vasco'},geometry:{type:'Polygon',coordinates:[[[-3.60,43.0],[-2.90,42.8],[-2.15,42.8],[-1.55,43.0],[-1.30,43.3],[-1.65,43.5],[-2.40,43.6],[-3.10,43.5],[-3.45,43.3],[-3.60,43.0]]]}},
-    {type:'Feature',properties:{name:'Comunidad Foral de Navarra'},geometry:{type:'Polygon',coordinates:[[[-2.45,42.6],[-1.75,42.6],[-1.05,42.8],[-0.85,42.4],[-1.10,41.9],[-1.75,41.7],[-2.30,41.8],[-2.55,42.2],[-2.45,42.6]]]}},
-    {type:'Feature',properties:{name:'La Rioja'},geometry:{type:'Polygon',coordinates:[[[-3.25,42.3],[-2.65,42.4],[-2.20,42.2],[-2.15,41.9],[-2.55,41.7],[-3.05,41.8],[-3.25,42.3]]]}},
-    {type:'Feature',properties:{name:'Aragón'},geometry:{type:'Polygon',coordinates:[[[-3.05,41.8],[-2.55,41.1],[-1.75,40.5],[-0.80,40.3],[-0.05,40.6],[0.65,40.9],[1.05,41.5],[0.85,42.4],[0.10,42.9],[-0.85,43.2],[-1.70,42.8],[-2.20,42.3],[-3.05,41.8]]]}},
-    {type:'Feature',properties:{name:'Cataluña'},geometry:{type:'Polygon',coordinates:[[[0.10,40.6],[0.95,40.1],[1.85,39.9],[2.70,40.2],[3.15,41.0],[3.25,41.8],[2.80,42.5],[1.85,42.9],[0.85,42.9],[0.25,42.5],[0.10,40.6]]]}},
-    {type:'Feature',properties:{name:'Comunidad Valenciana'},geometry:{type:'Polygon',coordinates:[[[-1.10,39.8],[-0.65,38.7],[0.05,38.2],[0.75,38.3],[1.00,39.0],[0.75,39.8],[0.20,40.7],[-0.30,40.6],[-0.85,40.1],[-1.10,39.8]]]}},
-    {type:'Feature',properties:{name:'Región de Murcia'},geometry:{type:'Polygon',coordinates:[[[-1.30,37.7],[-0.90,37.2],[-0.25,37.4],[-0.05,37.8],[-0.30,38.4],[-0.75,38.6],[-1.15,38.3],[-1.30,37.7]]]}},
-    {type:'Feature',properties:{name:'Andalucía'},geometry:{type:'Polygon',coordinates:[[[-7.55,36.7],[-6.70,36.0],[-5.55,35.9],[-4.20,35.9],[-2.20,36.6],[-1.55,37.3],[-1.70,38.1],[-2.45,38.8],[-3.45,39.0],[-4.60,39.1],[-6.10,38.8],[-7.00,38.2],[-7.40,37.5],[-7.55,36.7]]]}},
-    {type:'Feature',properties:{name:'Extremadura'},geometry:{type:'Polygon',coordinates:[[[-7.40,37.5],[-7.00,38.2],[-6.10,38.8],[-5.30,39.0],[-5.05,39.8],[-5.35,40.4],[-6.10,40.8],[-6.90,40.6],[-7.35,39.8],[-7.55,38.8],[-7.40,37.5]]]}},
-    {type:'Feature',properties:{name:'Castilla-La Mancha'},geometry:{type:'Polygon',coordinates:[[[-5.30,39.0],[-4.20,38.8],[-3.20,38.2],[-2.20,38.1],[-1.70,38.8],[-1.80,39.6],[-1.50,40.2],[-1.85,40.8],[-2.60,41.2],[-3.45,41.0],[-4.30,40.7],[-5.05,39.8],[-5.30,39.0]]]}},
-    {type:'Feature',properties:{name:'Castilla y León'},geometry:{type:'Polygon',coordinates:[[[-7.00,40.6],[-6.10,40.8],[-5.35,40.6],[-4.30,40.7],[-3.45,41.0],[-2.60,41.2],[-2.20,41.7],[-2.35,42.3],[-2.80,42.7],[-3.60,43.0],[-4.45,43.2],[-5.40,43.3],[-6.25,43.1],[-6.85,42.7],[-7.10,41.8],[-7.00,40.6]]]}},
-    {type:'Feature',properties:{name:'Comunidad de Madrid'},geometry:{type:'Polygon',coordinates:[[[-3.70,40.6],[-3.20,40.6],[-2.95,40.9],[-3.20,41.1],[-3.55,41.2],[-3.85,40.9],[-3.70,40.6]]]}},
-    {type:'Feature',properties:{name:'Islas Baleares'},geometry:{type:'MultiPolygon',coordinates:[[[[1.20,39.0],[1.55,38.7],[1.95,38.8],[2.05,39.2],[1.80,39.5],[1.45,39.4],[1.20,39.0]]],[[[2.40,39.4],[2.75,39.2],[3.00,39.3],[3.15,39.7],[2.85,39.9],[2.50,39.8],[2.40,39.4]]],[[[0.95,39.0],[1.10,38.9],[1.25,39.0],[1.20,39.1],[0.95,39.0]]]]}},
-    {type:'Feature',properties:{name:'Canarias'},geometry:{type:'MultiPolygon',coordinates:[[[[-18.20,27.50],[-17.60,27.48],[-17.20,27.58],[-16.80,27.88],[-16.35,28.10],[-15.90,28.05],[-15.30,27.95],[-14.80,27.95],[-14.20,28.05],[-13.65,28.25],[-13.25,28.55],[-13.15,28.95],[-13.30,29.35],[-13.75,29.60],[-14.40,29.65],[-15.05,29.55],[-15.55,29.35],[-16.05,29.25],[-16.60,29.30],[-17.20,29.15],[-17.70,28.90],[-18.00,28.55],[-18.20,27.50]]]]}},
-  ]
-};
-
 const dopCanarias = [
   { name:"Abona", targets:["Tenerife-Sur"] },
   { name:"El Hierro", targets:["El Hierro"] },
@@ -348,6 +312,22 @@ const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
 let state = { mode:"canarias", hits:0, mistakes:0, start:0, timer:null, regionPaths:{} };
 
+const DataCache = { es:null, canarias:null };
+
+async function loadSpainTopo(){
+  if (DataCache.es) return DataCache.es;
+  const url = "https://unpkg.com/es-atlas/es/provinces.json";
+  DataCache.es = await fetch(url).then(r=>r.json());
+  return DataCache.es;
+}
+
+async function loadCanariasGeo(){
+  if (DataCache.canarias) return DataCache.canarias;
+  const url = "https://datos.canarias.es/catalogos/estadisticas/dataset/24d0ed91-1ce1-47e3-8b4c-44cf843fec28/resource/b3f12117-e4fd-4b8c-a31f-a93a1a8a020d/download/islas_20170101.json";
+  DataCache.canarias = await fetch(url).then(r=>r.json());
+  return DataCache.canarias;
+}
+
 function fmtTime(ms){ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); const r=s%60; return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;}
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), 1800); }
 function resetCounters(){ state.hits=0; state.mistakes=0; updateHUD(); }
@@ -387,6 +367,7 @@ function makeChip(text){
    ========================== */
 async function renderMap(){
   const host = $('#map'); host.innerHTML='';
+  state.regionPaths = {};
   if(state.mode==='canarias'){ await renderCanarias(host); }
   else { await renderSpain(host); }
 }
@@ -395,56 +376,52 @@ async function renderMap(){
 async function renderCanarias(host){
   host.innerHTML='';
   try{
-    const geo = canariasGeo;
+    const geo = await loadCanariasGeo();
     const width=900, height=400;
-    const svg=d3.select(host).append('svg').attr('viewBox',`0 0 ${width} ${height}`);
+    const svg=d3.select(host).append('svg')
+      .attr('viewBox',`0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio','xMidYMid meet');
+
     const defs = svg.append('defs');
     const pattern = defs.append('pattern')
       .attr('id','tf-texture')
       .attr('patternUnits','userSpaceOnUse')
-      .attr('width',18)
-      .attr('height',18)
+      .attr('width',18).attr('height',18)
       .attr('patternTransform','rotate(20)');
-    pattern.append('rect')
-      .attr('width',18)
-      .attr('height',18)
-      .attr('fill','rgba(226,232,240,0.65)');
-    pattern.append('path')
-      .attr('d','M0,9 L18,9 M9,0 L9,18')
-      .attr('stroke','#94a3b8')
-      .attr('stroke-width',0.6)
-      .attr('opacity',0.45);
+    pattern.append('rect').attr('width',18).attr('height',18).attr('fill','rgba(226,232,240,0.65)');
+    pattern.append('path').attr('d','M0,9 L18,9 M9,0 L9,18')
+      .attr('stroke','#94a3b8').attr('stroke-width',0.6).attr('opacity',0.45);
+
     svg.append('rect').attr('class','hint').attr('x',0).attr('y',0).attr('width',width).attr('height',height);
+
     const projection = d3.geoMercator().fitSize([width,height], geo);
     const path = d3.geoPath(projection);
 
-    state.regionPaths = {};
-    // Dibuja islas
-    svg.append('g').selectAll('path')
+    state.regionPaths = state.regionPaths || {};
+
+    svg.append('g').selectAll('path.region')
       .data(geo.features)
       .enter().append('path')
       .attr('class','region')
-      .attr('d',path)
+      .attr('d', path)
       .each(function(d){
         const nm = islandName(d.properties);
         this.setAttribute('data-id', nm);
         state.regionPaths[nm]=this;
       })
       .append('title')
-      .text(d=>islandName(d.properties));
+      .text(d => islandName(d.properties));
 
-    // Capa dropzones por isla
-    svg.append('g').selectAll('path')
+    svg.append('g').selectAll('path.dz')
       .data(geo.features)
       .enter().append('path')
       .attr('class','dz')
-      .attr('d',path)
-      .attr('data-id', d=>islandName(d.properties))
+      .attr('d', path)
+      .attr('data-id', d => islandName(d.properties))
       .on('dragover', function(e){ e.preventDefault(); this.classList.add('active'); })
       .on('dragleave', function(){ this.classList.remove('active'); })
       .on('drop', function(e){ e.preventDefault(); this.classList.remove('active'); handleDrop(this.getAttribute('data-id')); });
 
-    // Subzonas de Tenerife (clip sobre el contorno real)
     const tf = geo.features.find(f => islandName(f.properties)==='Tenerife');
     if(tf){
       const tfId='clip-tf';
@@ -453,50 +430,45 @@ async function renderCanarias(host){
       const x0=b[0][0], y0=b[0][1], x1=b[1][0], y1=b[1][1];
       const w = x1-x0, h = y1-y0, col = w/5;
       const parts = [
-        {id:'Tenerife-Noroeste', x:x0, y:y0, w:col, h},
-        {id:'Tenerife-Norte',    x:x0+col, y:y0, w:col, h},
+        {id:'Tenerife-Noroeste', x:x0,       y:y0, w:col,   h},
+        {id:'Tenerife-Norte',    x:x0+col,   y:y0, w:col,   h},
         {id:'Tenerife-ValleOrotava', x:x0+col*2, y:y0, w:col, h},
-        {id:'Tenerife-Guimar',   x:x0+col*3, y:y0, w:col, h},
-        {id:'Tenerife-Sur',      x:x0+col*4, y:y0, w:col, h},
+        {id:'Tenerife-Guimar',   x:x0+col*3, y:y0, w:col,   h},
+        {id:'Tenerife-Sur',      x:x0+col*4, y:y0, w:col,   h},
       ];
       const sub = svg.append('g').attr('clip-path',`url(#${tfId})`);
       const subzones = sub.selectAll('g.subzone')
-        .data(parts)
-        .enter()
-        .append('g')
+        .data(parts).enter().append('g')
         .attr('class','subzone')
-        .each(function(d){
-          this.setAttribute('data-id', d.id);
-          state.regionPaths[d.id] = this;
-        });
+        .each(function(d){ this.setAttribute('data-id', d.id); state.regionPaths[d.id]=this; });
+
       subzones.append('rect')
         .attr('class','subzone-shape')
         .attr('x',d=>d.x).attr('y',d=>d.y)
         .attr('width',d=>d.w).attr('height',d=>d.h);
+
       subzones.append('rect')
         .attr('class','dz')
         .attr('x',d=>d.x).attr('y',d=>d.y)
         .attr('width',d=>d.w).attr('height',d=>d.h)
         .on('dragover', function(e){
-          e.preventDefault();
-          this.classList.add('active');
-          if(this.parentNode?.classList){ this.parentNode.classList.add('active'); }
+          e.preventDefault(); this.classList.add('active');
+          this.parentNode?.classList?.add('active');
         })
         .on('dragleave', function(){
           this.classList.remove('active');
-          if(this.parentNode?.classList){ this.parentNode.classList.remove('active'); }
+          this.parentNode?.classList?.remove('active');
         })
         .on('drop', function(e,d){
-          e.preventDefault();
-          this.classList.remove('active');
-          if(this.parentNode?.classList){ this.parentNode.classList.remove('active'); }
+          e.preventDefault(); this.classList.remove('active');
+          this.parentNode?.classList?.remove('active');
           handleDrop(d.id);
         })
-        .append('title').text(d=>zonesCanarias.find(z=>z.id===d.id)?.label||d.id);
+        .append('title').text(d=>d.id);
     }
-  }catch(e){
-    host.innerHTML='<div class="muted">No se pudo cargar el mapa de islas.</div>';
-    console.error(e);
+  }catch(err){
+    console.error(err);
+    host.innerHTML = '<div class="muted">No se pudo cargar el mapa de islas.</div>';
   }
 }
 function islandName(props){
@@ -518,94 +490,68 @@ function islandName(props){
 async function renderSpain(host){
   host.innerHTML='';
   try{
-    const width=900, height=600;
-    const svg=d3.select(host).append('svg').attr('viewBox',`0 0 ${width} ${height}`);
-    svg.append('rect').attr('class','hint').attr('x',0).attr('y',0).attr('width',width).attr('height',height);
+    const es = await loadSpainTopo();
 
-    const mainland = {
-      type:'FeatureCollection',
-      features: spainGeo.features.filter(f=>normalizeCA(f.properties.name||'')!=='Canarias')
-    };
-    const projection = d3.geoConicConformal().parallels([40, 42.5]).rotate([3, 0]).fitSize([width,height], mainland);
+    const width = 1000, height = 620;
+    const svg = d3.select(host).append('svg')
+      .attr('viewBox', `0 0 ${width} ${height}`)
+      .attr('preserveAspectRatio','xMidYMid meet');
+
+    const projection = d3.geoConicConformalSpain();
     const path = d3.geoPath(projection);
 
-    state.regionPaths = {};
+    const ccaa = topojson.feature(es, es.objects.autonomous_regions);
+    const provincias = topojson.feature(es, es.objects.provinces);
 
-    // Dibujo base (todas CCAA)
-    svg.append('g').selectAll('path.region')
-      .data(mainland.features)
+    projection.fitSize([width, height], ccaa);
+
+    svg.append('rect').attr('class','hint')
+      .attr('x',0).attr('y',0).attr('width',width).attr('height',height);
+
+    const gRegions = svg.append('g');
+    gRegions.selectAll('path.region')
+      .data(ccaa.features)
       .enter().append('path')
       .attr('class','region')
-      .attr('d',path)
+      .attr('d', path)
       .each(function(d){
-        const n = normalizeCA(d.properties.name || d.properties.NAMEUNIT || d.properties.NOMBRE || '');
-        this.setAttribute('data-ca', n);
-        state.regionPaths[n]=this;
+        const nm = (d.properties.NAMEUNIT || d.properties.name || '').trim();
+        this.setAttribute('data-id', nm);
+        state.regionPaths[nm] = this;
       })
-      .append('title').text(d=>normalizeCA(d.properties.name||d.properties.NOMBRE||''));
+      .append('title').text(d => d.properties.NAMEUNIT || d.properties.name);
 
-    // Capa de dropzones
     svg.append('g').selectAll('path.dz')
-      .data(mainland.features)
+      .data(ccaa.features)
       .enter().append('path')
       .attr('class','dz')
-      .attr('d',path)
-      .attr('data-ca', d=>normalizeCA(d.properties.name || d.properties.NOMBRE || ''))
+      .attr('d', path)
+      .attr('data-id', d => (d.properties.NAMEUNIT || d.properties.name || '').trim())
       .on('dragover', function(e){ e.preventDefault(); this.classList.add('active'); })
       .on('dragleave', function(){ this.classList.remove('active'); })
-      .on('drop', function(e){ e.preventDefault(); this.classList.remove('active'); handleDrop(this.getAttribute('data-ca')); });
+      .on('drop', function(e){
+        e.preventDefault(); this.classList.remove('active');
+        handleDrop(this.getAttribute('data-id'));
+      });
 
-    // Inset de Canarias: duplica la geometría y la reubica (contorno real escalado)
-    const canarias = spainGeo.features.filter(f => /canarias/i.test(f.properties.name||f.properties.NOMBRE||''));
-    if(canarias.length){
-      const gInset = svg.append('g').attr('aria-label','Inset Canarias');
-      const target = { x:120, y:420, w:240, h:140 };
-      const insetPath = d3.geoPath(d3.geoMercator().fitSize([target.w, target.h], {type:'FeatureCollection', features: canarias}));
-      const insetGroup = gInset.append('g').attr('transform',`translate(${target.x},${target.y})`);
-      insetGroup.append('rect')
-        .attr('x',0).attr('y',0)
-        .attr('width',target.w).attr('height',target.h)
-        .attr('fill','#e2e8f0').attr('stroke','#cbd5e1')
-        .attr('pointer-events','none');
-      gInset.append('text')
-        .attr('x', target.x + target.w/2)
-        .attr('y', target.y - 8)
-        .attr('text-anchor','middle')
-        .attr('fill', '#475569')
-        .attr('font-size', 12)
-        .text('Canarias');
-      insetGroup.selectAll('path.region')
-        .data(canarias).enter().append('path')
-        .attr('class','region')
-        .attr('d',d=>insetPath(d))
-        .each(function(){ this.setAttribute('data-ca','Canarias'); state.regionPaths['Canarias']=this; })
-        .append('title').text('Canarias (inset)');
-      insetGroup.selectAll('path.dz')
-        .data(canarias).enter().append('path')
-        .attr('class','dz')
-        .attr('d',d=>insetPath(d))
-        .attr('data-ca','Canarias')
-        .on('dragover', function(e){ e.preventDefault(); this.classList.add('active'); })
-        .on('dragleave', function(){ this.classList.remove('active'); })
-        .on('drop', function(e){ e.preventDefault(); this.classList.remove('active'); handleDrop('Canarias'); });
-    }
+    svg.append('path')
+      .attr('d', path(topojson.mesh(es, es.objects.provinces, (a,b)=>a!==b)))
+      .attr('fill','none')
+      .attr('stroke','#64748b')
+      .attr('stroke-width',0.6)
+      .attr('vector-effect','non-scaling-stroke');
+
+    svg.append('path')
+      .attr('d', projection.getCompositionBorders())
+      .attr('fill','none')
+      .attr('stroke','#94a3b8')
+      .attr('stroke-dasharray','4 3')
+      .attr('vector-effect','non-scaling-stroke');
+
   }catch(err){
-    host.innerHTML='<div class="muted">No se pudo cargar el mapa.</div>';
     console.error(err);
+    host.innerHTML = '<div class="muted">No se pudo cargar el mapa de España.</div>';
   }
-}
-function normalizeCA(name){
-  const n=(name||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-  const map={
-    'andalucia':'Andalucía','aragon':'Aragón','principado de asturias':'Asturias','asturias':'Asturias',
-    'illes balears':'Islas Baleares','islas baleares':'Islas Baleares','canarias':'Canarias','cantabria':'Cantabria',
-    'castilla y leon':'Castilla y León','castilla-la mancha':'Castilla-La Mancha','castilla la mancha':'Castilla-La Mancha',
-    'cataluna':'Cataluña','catalunya':'Cataluña','comunitat valenciana':'Comunidad Valenciana','comunidad valenciana':'Comunidad Valenciana',
-    'extremadura':'Extremadura','galicia':'Galicia','comunidad de madrid':'Comunidad de Madrid','madrid':'Comunidad de Madrid',
-    'region de murcia':'Región de Murcia','murcia':'Región de Murcia','comunidad foral de navarra':'Comunidad Foral de Navarra','navarra':'Comunidad Foral de Navarra',
-    'pais vasco':'País Vasco','euskadi':'País Vasco','la rioja':'La Rioja'
-  };
-  return map[n] || (name||'').trim();
 }
 
 /* ==========================
