@@ -4,10 +4,14 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Juego DOP del Vino · Mapas reales (España & Canarias)</title>
+
 <!-- Librerías -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
+<!-- Alias SEGURO antes de cargar composite (evita que nos pisen d3 completo) -->
+<script>window.d3v7 = window.d3;</script>
 <script src="https://d3js.org/topojson.v3.min.js"></script>
 <script src="https://unpkg.com/d3-composite-projections@1.3.0"></script>
+
 <style>
   :root{
     --bg:#f8fafc;--panel:#f1f5f9;--card:#e2e8f0;--muted:#6b7280;--text:#0f172a;
@@ -36,7 +40,7 @@
   .map{position:relative;min-height:70vh;background:var(--dz-bg);border:1px dashed var(--border);
     border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center}
   svg{width:100%;height:100%}
-  /* Para nitidez al escalar */
+  /* Nitidez: evita engorde de trazo al escalar */
   svg path{vector-effect:non-scaling-stroke}
   .hint{pointer-events:none;fill:#00000008}
   .region{fill:#94a3b8;stroke:#64748b;stroke-width:.6;stroke-linejoin:round}
@@ -150,6 +154,9 @@
 </div>
 
 <script>
+/* ========= Alias D3 seguro ========= */
+const D = (window.d3v7 || window.d3); // Usaremos D.select, D.geoPath, etc.
+
 /* ==========================
    Datasets de DOP (España + Canarias)
    ========================== */
@@ -345,7 +352,7 @@ function normalizeCCAA(name){
 function showMapError(host, titulo, err){
   const isFile = location.protocol === 'file:';
   const extra = isFile
-    ? '<br><small>Estás abriendo el archivo con <code>file://</code>. Inicia un servidor local (por ejemplo, VS Code Live Server) para evitar bloqueos de CORS.</small>'
+    ? '<br><small>Estás abriendo el archivo con <code>file://</code>. Inicia un servidor local (p.ej., VS Code Live Server) para evitar bloqueos de CORS.</small>'
     : '';
   host.innerHTML = `<div class="muted">No se pudo cargar el mapa de ${titulo}.<br><small>${escapeHtml(err?.message||String(err))}</small>${extra}</div>`;
   console.error(err);
@@ -379,7 +386,7 @@ async function loadCanariasGeo(){
   const urls = [
     // ISTAC oficial
     "https://datos.canarias.es/catalogos/estadisticas/dataset/24d0ed91-1ce1-47e3-8b4c-44cf843fec28/resource/b3f12117-e4fd-4b8c-a31f-a93a1a8a020d/download/islas_20170101.json",
-    // Fallback alternativo (dataset público; geometrías simplificadas pueden variar)
+    // Fallback alternativo (geometrías simplificadas)
     "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canary-islands.geojson"
   ];
   let lastErr = null;
@@ -388,7 +395,6 @@ async function loadCanariasGeo(){
       const r = await fetch(u, {mode:'cors'});
       if(!r.ok) throw new Error(`HTTP ${r.status} en ${u}`);
       const gj = await r.json();
-      // Aseguramos que tenga features
       if(gj && Array.isArray(gj.features)){
         DataCache.canarias = gj;
         return DataCache.canarias;
@@ -466,7 +472,7 @@ async function renderCanarias(host){
   try{
     const geo = await loadCanariasGeo();
     const width=900, height=400;
-    const svg=d3.select(host).append('svg')
+    const svg=D.select(host).append('svg')
       .attr('viewBox',`0 0 ${width} ${height}`)
       .attr('preserveAspectRatio','xMidYMid meet');
 
@@ -482,8 +488,8 @@ async function renderCanarias(host){
 
     svg.append('rect').attr('class','hint').attr('x',0).attr('y',0).attr('width',width).attr('height',height);
 
-    const projection = d3.geoMercator().fitSize([width,height], geo);
-    const path = d3.geoPath(projection);
+    const projection = D.geoMercator().fitSize([width,height], geo);
+    const path = D.geoPath(projection);
 
     state.regionPaths = state.regionPaths || {};
 
@@ -582,184 +588,3 @@ function islandName(props){
     .replace(/^la gomera$/i,'La Gomera')
     .replace(/^el hierro$/i,'El Hierro')
     .replace(/^tenerife$/i,'Tenerife');
-}
-
-/* España real (es-atlas CCAA) con inset de Canarias */
-async function renderSpain(host){
-  host.innerHTML='';
-  try{
-    const es = await loadSpainTopo();
-    const comm = await loadSpainCommunities();
-
-    const width = 1000, height = 620;
-    const svg = d3.select(host).append('svg')
-      .attr('viewBox', `0 0 ${width} ${height}`)
-      .attr('preserveAspectRatio','xMidYMid meet');
-
-    const projection = d3.geoConicConformalSpain();
-    const path = d3.geoPath(projection);
-
-    const ccaa = topojson.feature(comm, comm.objects.communities || comm.objects.autonomous_regions);
-    const provincias = topojson.feature(es, es.objects.provinces);
-
-    projection.fitSize([width, height], ccaa);
-
-    svg.append('rect').attr('class','hint')
-      .attr('x',0).attr('y',0).attr('width',width).attr('height',height);
-
-    const gRegions = svg.append('g');
-    gRegions.selectAll('path.region')
-      .data(ccaa.features)
-      .enter().append('path')
-      .attr('class','region')
-      .attr('d', path)
-      .each(function(d){
-        const raw = d.properties.NAMEUNIT || d.properties.name || '';
-        const nm = normalizeCCAA(raw);
-        this.setAttribute('data-id', nm);
-        state.regionPaths[nm] = this;
-      })
-      .append('title').text(d => normalizeCCAA(d.properties.NAMEUNIT || d.properties.name));
-
-    svg.append('g').selectAll('path.dz')
-      .data(ccaa.features)
-      .enter().append('path')
-      .attr('class','dz')
-      .attr('d', path)
-      .attr('data-id', d => normalizeCCAA(d.properties.NAMEUNIT || d.properties.name || ''))
-      .on('dragover', function(e){ e.preventDefault(); this.classList.add('active'); })
-      .on('dragleave', function(){ this.classList.remove('active'); })
-      .on('drop', function(e){
-        e.preventDefault(); this.classList.remove('active');
-        handleDrop(this.getAttribute('data-id'));
-      })
-      .on('click', function(){
-        const zone = this.getAttribute('data-id');
-        if(state.selectedChip){ handleDrop(zone, state.selectedChip); }
-      });
-
-    // Malla de provincias (no intercepta eventos para no bloquear drop)
-    svg.append('path')
-      .attr('d', path(topojson.mesh(es, es.objects.provinces, (a,b)=>a!==b)))
-      .attr('fill','none')
-      .attr('stroke','#64748b')
-      .attr('stroke-width',0.6)
-      .attr('vector-effect','non-scaling-stroke')
-      .attr('pointer-events','none');
-
-    // Borde del inset/comp: tampoco intercepta eventos
-    svg.append('path')
-      .attr('d', projection.getCompositionBorders())
-      .attr('fill','none')
-      .attr('stroke','#94a3b8')
-      .attr('stroke-dasharray','4 3')
-      .attr('vector-effect','non-scaling-stroke')
-      .attr('pointer-events','none');
-
-  }catch(err){
-    showMapError(host, 'España', err);
-  }
-}
-
-/* ==========================
-   Lógica de juego
-   ========================== */
-function handleDrop(zoneId, forcedChip){
-  const dragging = forcedChip || $('.draggable.dragging'); if(!dragging) return;
-  const name = dragging.textContent;
-  const dataset = state.mode==='canarias'? dopCanarias : dopEspaña;
-
-  const zoneNorm = (state.mode==='espana') ? normalizeCCAA(zoneId) : zoneId;
-  const item = dataset.find(d=>d.name===name);
-
-  const ok = item && item.targets.includes(zoneNorm);
-  if(ok){
-    state.hits++;
-    dragging.remove();
-    // Des-selección si venía del modo táctil
-    if(state.selectedChip===dragging){ state.selectedChip=null; }
-    const rp = state.regionPaths[zoneId] || state.regionPaths[zoneNorm];
-    if(rp){ rp.classList.add('hit'); }
-    toast(`✔ Correcto: ${name}`);
-  }else{
-    state.mistakes++; toast(`✖ Zona incorrecta para "${name}"`);
-  }
-  updateHUD();
-}
-
-function computeScore(){
-  const elapsed = state.start? (Date.now()-state.start) : 0;
-  const pending = $('#dopList').children.length;
-  const penalties = state.mistakes*1500 + pending*5000;
-  const raw = Math.max(0, 100000 - elapsed - penalties);
-  return { elapsed, score: Math.round(raw/100) };
-}
-
-function saveScore(){
-  const nick = $('#nick').value.trim() || 'Anónimo';
-  const {elapsed, score} = computeScore();
-  const rec = { nick, mode: state.mode, time: elapsed, mistakes: state.mistakes, score, date: Date.now() };
-  const key = 'vinoDOP.rank.v1';
-  const arr = JSON.parse(localStorage.getItem(key)||'[]');
-  arr.push(rec);
-  arr.sort((a,b)=> b.score - a.score || a.mistakes - b.mistakes || a.time - b.time);
-  localStorage.setItem(key, JSON.stringify(arr.slice(0,100)));
-  renderRank();
-  toast(`Puntuación: ${escapeHtml(nick)} · ${fmtTime(elapsed)} · ${state.mistakes} errores · ${score} pts`);
-}
-
-function renderRank(){
-  const key = 'vinoDOP.rank.v1';
-  const arr = JSON.parse(localStorage.getItem(key)||'[]');
-  const tb = $('#tblRank tbody'); tb.innerHTML='';
-  arr.forEach((r,i)=>{
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td>${escapeHtml(r.nick)}</td><td>${r.mode==='canarias'?'Canarias':'España'}</td><td>${fmtTime(r.time)}</td><td>${r.mistakes}</td><td>${r.score}</td>`;
-    tb.appendChild(tr);
-  });
-}
-
-function maybeWarnFileProtocol(){
-  if(location.protocol==='file:'){
-    toast('Aviso: abre en servidor local para evitar CORS');
-  }
-}
-
-/* ==========================
-   Eventos
-   ========================== */
-$('#btnStart').addEventListener('click', ()=>{ resetCounters(); loadPool(); startTimer(); toast('¡Partida iniciada!'); });
-$('#btnReset').addEventListener('click', ()=>{ stopTimer(); $('#time').textContent='00:00'; resetCounters(); loadPool(); toast('Reiniciado.'); });
-$('#finish').addEventListener('click', ()=>{ stopTimer(); saveScore(); });
-$('#giveup').addEventListener('click', ()=>{ stopTimer(); state.mistakes += $('#dopList').children.length; updateHUD(); saveScore(); });
-// Barajar
-$('#shuffle').addEventListener('click', ()=>{
-  const list=$('#dopList'); const els=[...list.children];
-  for(let i=els.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); list.appendChild(els[j]); els.splice(j,1); }
-});
-// Filtro
-$('#search').addEventListener('input', loadPool);
-// Tabs
-$$('.tab').forEach(t=> t.addEventListener('click', ()=> setMode(t.dataset.mode)));
-$$('.tab').forEach(t=> t.addEventListener('keydown', (ev)=>{
-  if(ev.key==='Enter' || ev.key===' '){ ev.preventDefault(); setMode(t.dataset.mode); }
-}));
-// Export/Import ranking
-$('#export').addEventListener('click', ()=>{
-  const key='vinoDOP.rank.v1'; const arr=localStorage.getItem(key)||'[]';
-  const blob=new Blob([arr],{type:'application/json'}); const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download='ranking_dop.json'; a.click();
-});
-$('#import').addEventListener('click', ()=> $('#file').click());
-$('#file').addEventListener('change', e=>{
-  const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
-  rd.onload=()=>{ try{ const key='vinoDOP.rank.v1'; JSON.parse(rd.result); localStorage.setItem(key, rd.result); renderRank(); toast('Ranking importado.'); }catch{ toast('Archivo no válido'); } };
-  rd.readAsText(f);
-});
-
-/* init */
-maybeWarnFileProtocol();
-renderMap().then(()=>{ loadPool(); renderRank(); }).catch(()=>{ loadPool(); renderRank(); });
-</script>
-</body>
-</html>
