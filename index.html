@@ -127,7 +127,7 @@
       <div class="row"><span>Tiempo</span><strong id="time">00:00</strong></div>
       <div class="row"><span>Acertadas</span><strong id="hits">0</strong></div>
       <div class="row"><span>Errores</span><strong id="mistakes" class="bad">0</strong></div>
-      <div class="row"><span>Pendientes</span><strong id="pending">0</strong></div>
+      <div class="row"><span> Pendientes</span><strong id="pending">0</strong></div>
     </div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button id="finish">Terminar y puntuar</button>
@@ -319,7 +319,11 @@ const dopEspaña = [
    ========================== */
 const $ = s => document.querySelector(s);
 const $$ = s => Array.from(document.querySelectorAll(s));
-let state = { mode:"canarias", hits:0, mistakes:0, start:0, timer:null, regionPaths:{}, selectedChip:null };
+let state = {
+  mode:"canarias", hits:0, mistakes:0, start:0, timer:null,
+  regionPaths:{}, selectedChip:null,
+  dragEl:null, dragName:null
+};
 
 const DataCache = { es:null, comm:null, canarias:null };
 
@@ -359,49 +363,53 @@ function showMapError(host, titulo, err){
 }
 
 /* ==========================
-   Carga de datos (con fallback)
+   Carga robusta (fallbacks)
    ========================== */
+async function fetchJSONFallback(urls, label){
+  let lastErr=null;
+  for(const u of urls){
+    try{
+      const r = await fetch(u, {mode:'cors'});
+      if(!r.ok) throw new Error(`HTTP ${r.status} en ${u}`);
+      return await r.json();
+    }catch(e){ lastErr=e; }
+  }
+  throw new Error(`${label}: Failed to fetch · Último error: ${lastErr?.message||lastErr}`);
+}
+
 async function loadSpainTopo(){
   if (DataCache.es) return DataCache.es;
-  const url = "https://unpkg.com/es-atlas/es/provinces.json";
-  DataCache.es = await fetch(url).then(r=>{
-    if(!r.ok) throw new Error(`HTTP ${r.status} al cargar provinces.json`);
-    return r.json();
-  });
+  DataCache.es = await fetchJSONFallback([
+    "https://unpkg.com/es-atlas/es/provinces.json",
+    "https://cdn.jsdelivr.net/npm/es-atlas@2/es/provinces.json",
+    "https://cdn.jsdelivr.net/npm/es-atlas/es/provinces.json"
+  ], 'provinces.json');
   return DataCache.es;
 }
 
 async function loadSpainCommunities(){
   if (DataCache.comm) return DataCache.comm;
-  const url = "https://unpkg.com/es-atlas/es/communities.json";
-  DataCache.comm = await fetch(url).then(r=>{
-    if(!r.ok) throw new Error(`HTTP ${r.status} al cargar communities.json`);
-    return r.json();
-  });
+  DataCache.comm = await fetchJSONFallback([
+    "https://unpkg.com/es-atlas/es/communities.json",
+    "https://cdn.jsdelivr.net/npm/es-atlas@2/es/communities.json",
+    "https://cdn.jsdelivr.net/npm/es-atlas/es/communities.json"
+  ], 'communities.json');
   return DataCache.comm;
 }
 
 async function loadCanariasGeo(){
   if (DataCache.canarias) return DataCache.canarias;
-  const urls = [
+  DataCache.canarias = await fetchJSONFallback([
     // ISTAC oficial
     "https://datos.canarias.es/catalogos/estadisticas/dataset/24d0ed91-1ce1-47e3-8b4c-44cf843fec28/resource/b3f12117-e4fd-4b8c-a31f-a93a1a8a020d/download/islas_20170101.json",
     // Fallback alternativo (geometrías simplificadas)
     "https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/canary-islands.geojson"
-  ];
-  let lastErr = null;
-  for(const u of urls){
-    try{
-      const r = await fetch(u, {mode:'cors'});
-      if(!r.ok) throw new Error(`HTTP ${r.status} en ${u}`);
-      const gj = await r.json();
-      if(gj && Array.isArray(gj.features)){
-        DataCache.canarias = gj;
-        return DataCache.canarias;
-      }
-    }catch(e){ lastErr = e; }
+  ], 'islas Canarias (GeoJSON)');
+  // Aseguramos que haya .features
+  if(!DataCache.canarias || !Array.isArray(DataCache.canarias.features)){
+    throw new Error('GeoJSON inválido (sin features)');
   }
-  throw lastErr || new Error('No se pudo obtener GeoJSON de Canarias');
+  return DataCache.canarias;
 }
 
 function fmtTime(ms){ const s=Math.max(0,Math.floor(ms/1000)); const m=Math.floor(s/60); const r=s%60; return `${String(m).padStart(2,'0')}:${String(r).padStart(2,'0')}`;}
@@ -438,8 +446,18 @@ function loadPool(){
 function makeChip(text){
   const el=document.createElement('div');
   el.className='draggable'; el.textContent=text; el.setAttribute('draggable','true'); el.setAttribute('role','button'); el.setAttribute('tabindex','0');
-  el.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain', text); el.classList.add('dragging'); state.selectedChip=null; });
-  el.addEventListener('dragend', ()=> el.classList.remove('dragging'));
+  el.addEventListener('dragstart', e=>{
+    e.dataTransfer.setData('text/plain', text);
+    el.classList.add('dragging');
+    state.selectedChip=null;
+    state.dragEl = el;
+    state.dragName = text;
+  });
+  el.addEventListener('dragend', ()=>{
+    el.classList.remove('dragging');
+    // No vaciamos dragName aquí por si el drop llegó justo antes;
+    // se limpiará en handleDrop.
+  });
   // Fallback táctil / click-to-place
   el.addEventListener('click', ()=>{
     if(state.selectedChip===el){ el.classList.remove('selected'); state.selectedChip=null; }
@@ -533,7 +551,7 @@ async function renderCanarias(host){
       const w = x1-x0, h = y1-y0, col = w/5;
       const parts = [
         {id:'Tenerife-Noroeste', x:x0,       y:y0, w:col,   h},
-        {id:'Tenerife-Norte',    x:x0+col,   y:y0, w:col,   h},
+        {id:'Tenerife-Norte',    x+x0+col,   y:y0, w:col,   h},
         {id:'Tenerife-ValleOrotava', x:x0+col*2, y:y0, w:col, h},
         {id:'Tenerife-Guimar',   x:x0+col*3, y:y0, w:col,   h},
         {id:'Tenerife-Sur',      x:x0+col*4, y:y0, w:col,   h},
@@ -677,24 +695,30 @@ async function renderSpain(host){
    Lógica de juego
    ========================== */
 function handleDrop(zoneId, forcedChip){
-  const dragging = forcedChip || $('.draggable.dragging'); if(!dragging) return;
-  const name = dragging.textContent;
-  const dataset = state.mode==='canarias'? dopCanarias : dopEspaña;
+  // 1) Determinar chip y nombre desde: forcedChip (tap), estado de arrastre o .dragging
+  const chip = forcedChip || state.dragEl || $('.draggable.dragging');
+  const name = forcedChip ? forcedChip.textContent : (state.dragName || chip?.textContent || '');
+  if(!chip || !name){ return; }
 
+  const dataset = state.mode==='canarias'? dopCanarias : dopEspaña;
   const zoneNorm = (state.mode==='espana') ? normalizeCCAA(zoneId) : zoneId;
   const item = dataset.find(d=>d.name===name);
 
   const ok = item && item.targets.includes(zoneNorm);
   if(ok){
     state.hits++;
-    dragging.remove();
-    if(state.selectedChip===dragging){ state.selectedChip=null; }
+    chip.remove();
+    if(state.selectedChip===chip){ state.selectedChip=null; }
     const rp = state.regionPaths[zoneId] || state.regionPaths[zoneNorm];
     if(rp){ rp.classList.add('hit'); }
     toast(`✔ Correcto: ${name}`);
   }else{
     state.mistakes++; toast(`✖ Zona incorrecta para "${name}"`);
   }
+  // limpiar estado de arrastre
+  state.dragEl = null;
+  state.dragName = null;
+
   updateHUD();
 }
 
